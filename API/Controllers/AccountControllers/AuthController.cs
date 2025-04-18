@@ -1,6 +1,8 @@
 ﻿using API.DTOs.AuthDTOs;
+using API.DTOs.UserDTOs;
 using API.Entities;
 using API.Interfaces;
+using AutoMapper;
 using Microsoft.AspNetCore.Authorization;
 using Microsoft.AspNetCore.Identity;
 using Microsoft.AspNetCore.Mvc;
@@ -8,7 +10,7 @@ using Microsoft.EntityFrameworkCore;
 
 namespace API.Controllers.AccountControllers;
 
-public class AuthController(UserManager<User> userManager, ITokenService tokenService) : BaseApiController
+public class AuthController(UserManager<User> userManager, ITokenService tokenService, IMapper mapper) : BaseApiController
 {
     [Authorize(Roles = "Admin")]
     [HttpPost("register")] // /auth/register
@@ -20,6 +22,10 @@ public class AuthController(UserManager<User> userManager, ITokenService tokenSe
         {
             UserName = registerDto.Username.ToLower(),
             Email = registerDto.Email,
+            FatherName = "",
+            FirstName = "",
+            LastName = "",
+            PhoneNumber = "",
         };
 
         var result = await userManager.CreateAsync(user, registerDto.Password);
@@ -39,9 +45,13 @@ public class AuthController(UserManager<User> userManager, ITokenService tokenSe
 
         Response.Cookies.Append("refreshToken", refreshToken, cookieOptions);
 
+        var UserDto = mapper.Map<UserDto>(user);
+        var userRoles = await userManager.GetRolesAsync(user);
+        UserDto.UserRoles = userRoles.FirstOrDefault();
+
         return new UserAuthDto
         {
-            Username = user.UserName,
+            User = UserDto,
             Token = accessToken
         };
     }
@@ -69,9 +79,13 @@ public class AuthController(UserManager<User> userManager, ITokenService tokenSe
 
         Response.Cookies.Append("refreshToken", refreshToken, cookieOptions);
 
+        var UserDto = mapper.Map<UserDto>(user);
+        var userRoles = await userManager.GetRolesAsync(user);
+        UserDto.UserRoles = userRoles.FirstOrDefault();
+
         return new UserAuthDto
         {
-            Username = user.UserName,
+            User = UserDto,
             Token = accessToken
         };
     }
@@ -90,11 +104,13 @@ public class AuthController(UserManager<User> userManager, ITokenService tokenSe
         if (principal == null) return Unauthorized("Cannot find principal from token");
 
         var username = principal.Identity?.Name;
+        if (username == null || username.Length == 0) return Unauthorized("Username not found in credentials");
+
         var user = await userManager.FindByNameAsync(username);
         if (user == null || user.RefreshToken != refreshToken || user.RefreshTokenExpiryTime <= DateTime.UtcNow)
             return Unauthorized("Invalid refresh token");
 
-        var (newAccesToken, newRefereshToken) = await tokenService.CreateToken(user);
+        var (newAccessToken, newRefreshToken) = await tokenService.CreateToken(user);
 
         var cookieOptions = new CookieOptions
         {
@@ -104,16 +120,20 @@ public class AuthController(UserManager<User> userManager, ITokenService tokenSe
             Expires = DateTime.UtcNow.AddDays(7),
         };
 
-        Response.Cookies.Append("refreshToken", refreshToken, cookieOptions);
+        Response.Cookies.Append("refreshToken", newRefreshToken, cookieOptions);
+
+        var UserDto = mapper.Map<UserDto>(user);
+        var userRoles = await userManager.GetRolesAsync(user);
+        UserDto.UserRoles = userRoles.FirstOrDefault();
 
         return new UserAuthDto
         {
-            Username = user.UserName,
-            Token = accessToken
+            User = UserDto,
+            Token = newAccessToken
         };
     }
 
-    // Check if user exist in DB by comparing username in lower case
+    // Check if user exist in DB by comparing username in NORMILIZED view
     // System not register sensitive to case
     // "Test" and "test" are the same
     private async Task<bool> UserExists(string username)

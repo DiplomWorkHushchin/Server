@@ -24,7 +24,11 @@ public class Seed
 
         var admin = new User
         {
-            UserName = "admin"
+            UserName = "admin",
+            FatherName = "",
+            FirstName = "",
+            LastName = "",
+            PhoneNumber = "",
         };
 
         // Admin password here only for dev (Update logic to get from env sooner)
