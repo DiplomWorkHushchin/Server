@@ -27,10 +27,22 @@ public class AuthController(UserManager<User> userManager, ITokenService tokenSe
 
         if (!result.Succeeded) return BadRequest(result.Errors);
 
+        var (accessToken, refreshToken) = await tokenService.CreateToken(user);
+
+        var cookieOptions = new CookieOptions
+        {
+            HttpOnly = true,
+            Secure = true,
+            SameSite = SameSiteMode.Strict,
+            Expires = DateTime.UtcNow.AddDays(7),
+        };
+
+        Response.Cookies.Append("refreshToken", refreshToken, cookieOptions);
+
         return new UserAuthDto
         {
             Username = user.UserName,
-            Token = await tokenService.CreateToken(user)
+            Token = accessToken
         };
     }
 
@@ -40,18 +52,65 @@ public class AuthController(UserManager<User> userManager, ITokenService tokenSe
     {
         var user = await userManager.Users
             .FirstOrDefaultAsync(x => x.NormalizedUserName == loginDto.Username.ToUpper());
-
         if (user == null || user.UserName == null) return Unauthorized("Invalid username");
 
         var result = await userManager.CheckPasswordAsync(user, loginDto.Password);
-
         if (!result) return Unauthorized();
+
+        var (accessToken, refreshToken) = await tokenService.CreateToken(user);
+
+        var cookieOptions = new CookieOptions
+        {
+            HttpOnly = true,
+            Secure = true,
+            SameSite = SameSiteMode.Strict,
+            Expires = DateTime.UtcNow.AddDays(7),
+        };
+
+        Response.Cookies.Append("refreshToken", refreshToken, cookieOptions);
 
         return new UserAuthDto
         {
             Username = user.UserName,
-            Token = await tokenService.CreateToken(user)
-        }; ;
+            Token = accessToken
+        };
+    }
+
+    [AllowAnonymous]
+    [HttpPost("refresh-token")] // /auth/refresh-token
+    public async Task<ActionResult<UserAuthDto>> UpdateUserTokens()
+    {
+        var refreshToken = Request.Cookies["refreshToken"];
+        var accessToken = Request.Headers["Authorization"].FirstOrDefault()?.Split(" ").Last();
+
+        if (string.IsNullOrEmpty(refreshToken) || string.IsNullOrEmpty(accessToken))
+            return Unauthorized("Cannot find tokens");
+
+        var principal = tokenService.GetPrincipalFromExpiredToken(accessToken);
+        if (principal == null) return Unauthorized("Cannot find principal from token");
+
+        var username = principal.Identity?.Name;
+        var user = await userManager.FindByNameAsync(username);
+        if (user == null || user.RefreshToken != refreshToken || user.RefreshTokenExpiryTime <= DateTime.UtcNow)
+            return Unauthorized("Invalid refresh token");
+
+        var (newAccesToken, newRefereshToken) = await tokenService.CreateToken(user);
+
+        var cookieOptions = new CookieOptions
+        {
+            HttpOnly = true,
+            Secure = true,
+            SameSite = SameSiteMode.Strict,
+            Expires = DateTime.UtcNow.AddDays(7),
+        };
+
+        Response.Cookies.Append("refreshToken", refreshToken, cookieOptions);
+
+        return new UserAuthDto
+        {
+            Username = user.UserName,
+            Token = accessToken
+        };
     }
 
     // Check if user exist in DB by comparing username in lower case

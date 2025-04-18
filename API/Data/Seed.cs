@@ -27,6 +27,7 @@ public class Seed
             UserName = "admin"
         };
 
+        // Admin password here only for dev (Update logic to get from env sooner)
         await userManager.CreateAsync(admin, "Pa$$w0rd");
         await userManager.AddToRoleAsync(admin, "Admin");
     }
