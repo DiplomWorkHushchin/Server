@@ -13,6 +13,7 @@ public class UsersController(DataContext context) : BaseApiController
     private readonly DataContext _context = context;
 
     // GET api/users
+    [Authorize(Roles = "Admin")]
     [HttpGet]
     public async Task<ActionResult<IEnumerable<User>>> GetUsers()
     {
@@ -24,6 +25,7 @@ public class UsersController(DataContext context) : BaseApiController
     }
 
     // GET api/users/5
+    [Authorize(Roles = "Admin")]
     [HttpGet("{id:int}")]
     public async Task<ActionResult<User>> GetUser(int id)
     {

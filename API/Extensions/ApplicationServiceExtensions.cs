@@ -1,6 +1,8 @@
 ﻿using API.Data;
+using API.Entities;
 using API.Interfaces;
 using API.Services;
+using Microsoft.AspNetCore.Identity;
 using Microsoft.EntityFrameworkCore;
 
 namespace API.Extensions;

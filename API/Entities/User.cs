@@ -1,10 +1,9 @@
-﻿namespace API.Entities
+﻿using Microsoft.AspNetCore.Identity;
+
+namespace API.Entities
 {
-    public class User
+    public class User : IdentityUser<int>
     {
-        public int Id { get; set; }
-        public required string UserName { get; set; }
-        public required byte[] PasswordHash { get; set; }
-        public required byte[] PasswordSalt { get; set; }
+        public ICollection<UserRole> UserRoles { get; set; } = [];
     }
 }
