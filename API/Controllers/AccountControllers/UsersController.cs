@@ -25,12 +25,15 @@ public class UsersController(UserManager<User> userManager, IMapper mapper) : Ba
 
         foreach (var user in users)
         {
-            var UserDto = mapper.Map<UserDto>(user);
+            var userDto = mapper.Map<UserDto>(user);
             var userRoles = await userManager.GetRolesAsync(user);
-            if (userRoles == null || !userRoles.Any()) return NotFound("Error collecting data of user");
-            UserDto.UserRoles = userRoles.FirstOrDefault();
 
-            usersDto.Add(UserDto);
+            var userRole = userRoles.FirstOrDefault();
+            if (userRole == null) return BadRequest("User has no roles assigned");
+
+            userDto.UserRoles = userRole;
+
+            usersDto.Add(userDto);
         }
         return usersDto;
     }
@@ -46,7 +49,11 @@ public class UsersController(UserManager<User> userManager, IMapper mapper) : Ba
 
         var userDto = mapper.Map<UserDto>(user);
         var userRoles = await userManager.GetRolesAsync(user);
-        userDto.UserRoles = userRoles.FirstOrDefault();
+
+        var userRole = userRoles.FirstOrDefault();
+        if (userRole == null) return BadRequest("User has no roles assigned");
+
+        userDto.UserRoles = userRole;
 
         return Ok(userDto);
     }

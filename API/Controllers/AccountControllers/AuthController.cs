@@ -43,17 +43,17 @@ public class AuthController(UserManager<User> userManager, ITokenService tokenSe
             Expires = DateTime.UtcNow.AddDays(7),
         });
 
-        var UserDto = mapper.Map<UserDto>(user);
+        var userDto = mapper.Map<UserDto>(user);
         var userRoles = await userManager.GetRolesAsync(user);
 
         var userRole = userRoles.FirstOrDefault();
         if (userRole == null) return BadRequest("User has no roles assigned");
 
-        UserDto.UserRoles = userRole;
+        userDto.UserRoles = userRole;
 
         return new UserAuthDto
         {
-            User = UserDto,
+            User = userDto,
             Token = accessToken
         };
     }
@@ -79,17 +79,17 @@ public class AuthController(UserManager<User> userManager, ITokenService tokenSe
             Expires = DateTime.UtcNow.AddDays(7)
         });
 
-        var UserDto = mapper.Map<UserDto>(user);
+        var userDto = mapper.Map<UserDto>(user);
         var userRoles = await userManager.GetRolesAsync(user);
 
         var userRole = userRoles.FirstOrDefault();
         if (userRole == null) return BadRequest("User has no roles assigned");
 
-        UserDto.UserRoles = userRole;
+        userDto.UserRoles = userRole;
 
         return new UserAuthDto
         {
-            User = UserDto,
+            User = userDto,
             Token = accessToken
         };
     }
@@ -132,17 +132,17 @@ public class AuthController(UserManager<User> userManager, ITokenService tokenSe
 
         Response.Cookies.Append("refreshToken", newRefreshToken.Token, cookieOptions);
 
-        var UserDto = mapper.Map<UserDto>(user);
+        var userDto = mapper.Map<UserDto>(user);
         var userRoles = await userManager.GetRolesAsync(user);
 
         var userRole = userRoles.FirstOrDefault();
         if (userRole == null) return BadRequest("User has no roles assigned");
 
-        UserDto.UserRoles = userRole;
+        userDto.UserRoles = userRole;
 
         return new UserAuthDto
         {
-            User = UserDto,
+            User = userDto,
             Token = newAccessToken
         };
     }
