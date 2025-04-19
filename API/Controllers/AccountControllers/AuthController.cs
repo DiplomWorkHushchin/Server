@@ -35,19 +35,21 @@ public class AuthController(UserManager<User> userManager, ITokenService tokenSe
 
         var (accessToken, refreshToken) = await tokenService.CreateToken(user);
 
-        var cookieOptions = new CookieOptions
+        Response.Cookies.Append("refreshToken", refreshToken.Token, new CookieOptions
         {
             HttpOnly = true,
             Secure = true,
             SameSite = SameSiteMode.Strict,
             Expires = DateTime.UtcNow.AddDays(7),
-        };
-
-        Response.Cookies.Append("refreshToken", refreshToken, cookieOptions);
+        });
 
         var UserDto = mapper.Map<UserDto>(user);
         var userRoles = await userManager.GetRolesAsync(user);
-        UserDto.UserRoles = userRoles.FirstOrDefault();
+
+        var userRole = userRoles.FirstOrDefault();
+        if (userRole == null) return BadRequest("User has no roles assigned");
+
+        UserDto.UserRoles = userRole;
 
         return new UserAuthDto
         {
@@ -69,19 +71,21 @@ public class AuthController(UserManager<User> userManager, ITokenService tokenSe
 
         var (accessToken, refreshToken) = await tokenService.CreateToken(user);
 
-        var cookieOptions = new CookieOptions
+        Response.Cookies.Append("refreshToken", refreshToken.Token, new CookieOptions
         {
             HttpOnly = true,
             Secure = true,
             SameSite = SameSiteMode.Strict,
-            Expires = DateTime.UtcNow.AddDays(7),
-        };
-
-        Response.Cookies.Append("refreshToken", refreshToken, cookieOptions);
+            Expires = DateTime.UtcNow.AddDays(7)
+        });
 
         var UserDto = mapper.Map<UserDto>(user);
         var userRoles = await userManager.GetRolesAsync(user);
-        UserDto.UserRoles = userRoles.FirstOrDefault();
+
+        var userRole = userRoles.FirstOrDefault();
+        if (userRole == null) return BadRequest("User has no roles assigned");
+
+        UserDto.UserRoles = userRole;
 
         return new UserAuthDto
         {
@@ -94,6 +98,7 @@ public class AuthController(UserManager<User> userManager, ITokenService tokenSe
     [HttpPost("refresh-token")] // /auth/refresh-token
     public async Task<ActionResult<UserAuthDto>> UpdateUserTokens()
     {
+        // Get refresh token from cookie, check for null
         var refreshToken = Request.Cookies["refreshToken"];
         var accessToken = Request.Headers["Authorization"].FirstOrDefault()?.Split(" ").Last();
 
@@ -106,9 +111,14 @@ public class AuthController(UserManager<User> userManager, ITokenService tokenSe
         var username = principal.Identity?.Name;
         if (username == null || username.Length == 0) return Unauthorized("Username not found in credentials");
 
-        var user = await userManager.FindByNameAsync(username);
-        if (user == null || user.RefreshToken != refreshToken || user.RefreshTokenExpiryTime <= DateTime.UtcNow)
-            return Unauthorized("Invalid refresh token");
+        var user = await userManager.Users.Include(u => u.RefreshTokens).FirstOrDefaultAsync(u => u.UserName == username);
+
+
+        if (user == null) return Unauthorized("No users founded");
+
+        var oldRefreshToken = user.RefreshTokens.FirstOrDefault(x => x.Token == refreshToken);
+        if (oldRefreshToken == null || oldRefreshToken.ExpiryDate < DateTime.UtcNow) 
+            return Unauthorized("No refresh token founded");
 
         var (newAccessToken, newRefreshToken) = await tokenService.CreateToken(user);
 
@@ -120,11 +130,15 @@ public class AuthController(UserManager<User> userManager, ITokenService tokenSe
             Expires = DateTime.UtcNow.AddDays(7),
         };
 
-        Response.Cookies.Append("refreshToken", newRefreshToken, cookieOptions);
+        Response.Cookies.Append("refreshToken", newRefreshToken.Token, cookieOptions);
 
         var UserDto = mapper.Map<UserDto>(user);
         var userRoles = await userManager.GetRolesAsync(user);
-        UserDto.UserRoles = userRoles.FirstOrDefault();
+
+        var userRole = userRoles.FirstOrDefault();
+        if (userRole == null) return BadRequest("User has no roles assigned");
+
+        UserDto.UserRoles = userRole;
 
         return new UserAuthDto
         {

@@ -12,6 +12,6 @@ public class User : IdentityUser<int>
     public required string LastName { get; set; } = "";
     [MinLength(2)]
     public required string FatherName { get; set; } = "";
-    public string RefreshToken { get; set; } = null!;
-    public DateTime RefreshTokenExpiryTime { get; set; }
+    public ICollection<RefreshToken> RefreshTokens { get; set; } = new List<RefreshToken>();
+
 }

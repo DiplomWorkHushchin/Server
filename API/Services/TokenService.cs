@@ -1,6 +1,8 @@
-﻿using API.Entities;
+﻿using API.Data;
+using API.Entities;
 using API.Interfaces;
 using Microsoft.AspNetCore.Identity;
+using Microsoft.EntityFrameworkCore;
 using Microsoft.IdentityModel.Tokens;
 using System.IdentityModel.Tokens.Jwt;
 using System.Security.Claims;
@@ -9,9 +11,9 @@ using System.Text;
 
 namespace API.Services;
 
-public class TokenService(IConfiguration config, UserManager<User> userManager) : ITokenService
+public class TokenService(IConfiguration config, UserManager<User> userManager, DataContext context) : ITokenService
 {
-    public async Task<(string accesToken, string refreshToken)> CreateToken(User user)
+    public async Task<(string accesToken, RefreshToken refreshToken)> CreateToken(User user)
     {
         var tokenKey = config["TokenKey"] ?? throw new Exception("Cannot access token key from config");
         if (tokenKey.Length < 64) throw new Exception("Token key is too short, must be at least 64 characters");
@@ -41,11 +43,18 @@ public class TokenService(IConfiguration config, UserManager<User> userManager) 
         var token = tokenHandler.CreateToken(tokenDescriptor);
         var accessToken = tokenHandler.WriteToken(token);
 
-        var refreshToken = GenerateRefreshToken();
+        var refreshToken = new RefreshToken
+        {
+            Token = GenerateRefreshToken(),
+            ExpiryDate = DateTime.UtcNow.AddDays(7),
+            Created = DateTime.UtcNow,
+            UserId = user.Id
+        };
 
-        user.RefreshToken = refreshToken;
-        user.RefreshTokenExpiryTime = DateTime.UtcNow.AddDays(7);
+        var oldTokens = await context.RefreshToken.Where(t => t.UserId == user.Id).ToListAsync();
+        context.RefreshToken.RemoveRange(oldTokens);
 
+        user.RefreshTokens.Add(refreshToken);
         await userManager.UpdateAsync(user);
 
         return (accessToken, refreshToken);
@@ -61,7 +70,7 @@ public class TokenService(IConfiguration config, UserManager<User> userManager) 
             IssuerSigningKey = new SymmetricSecurityKey(Encoding.UTF8.GetBytes(tokenKey)),
             ValidateIssuer = true,
             ValidateAudience = true,
-            ValidateLifetime = true
+            ValidateLifetime = false
         };
 
         var tokenHandler = new JwtSecurityTokenHandler();

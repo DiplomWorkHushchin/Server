@@ -5,6 +5,6 @@ namespace API.Interfaces;
 
 public interface ITokenService
 {
-    Task<(string accesToken, string refreshToken)> CreateToken(User user);
+    Task<(string accesToken, RefreshToken refreshToken)> CreateToken(User user);
     ClaimsPrincipal? GetPrincipalFromExpiredToken(string token);
 }
