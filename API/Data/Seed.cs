@@ -1,6 +1,5 @@
 ﻿using API.Entities;
 using Microsoft.AspNetCore.Identity;
-using Microsoft.EntityFrameworkCore;
 
 namespace API.Data;
 
@@ -15,6 +14,7 @@ public class Seed
             new() { Name = "Student" },
             new() { Name = "Curator" },
             new() { Name = "Teacher" },
+            new() { Name = "Guest" },
         };
 
         foreach (var role in roles)
@@ -25,6 +25,7 @@ public class Seed
         var admin = new User
         {
             UserName = "admin",
+            Email = "admin@example.com",
             FatherName = "",
             FirstName = "",
             LastName = "",

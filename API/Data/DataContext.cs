@@ -10,6 +10,7 @@ public class DataContext(DbContextOptions options) : IdentityDbContext<User, Rol
 {
     public DbSet<RefreshToken> RefreshToken { get; set; }
 
+
     protected override void OnModelCreating(ModelBuilder builder)
     {
         base.OnModelCreating(builder);

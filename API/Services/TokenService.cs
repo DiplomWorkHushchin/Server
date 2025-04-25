@@ -23,7 +23,7 @@ public class TokenService(IConfiguration config, UserManager<User> userManager, 
 
         var claims = new List<Claim>
         {
-            new Claim(ClaimTypes.NameIdentifier, user.UserName)
+            new Claim(ClaimTypes.Name, user.UserName)
         };
 
         var roles = await userManager.GetRolesAsync(user);
@@ -35,7 +35,7 @@ public class TokenService(IConfiguration config, UserManager<User> userManager, 
         var tokenDescriptor = new SecurityTokenDescriptor
         {
             Subject = new ClaimsIdentity(claims),
-            Expires = DateTime.UtcNow.AddMinutes(15),
+            Expires = DateTime.UtcNow.AddMinutes(1),
             SigningCredentials = creds
         };  
 
@@ -68,8 +68,8 @@ public class TokenService(IConfiguration config, UserManager<User> userManager, 
         {
             ValidateIssuerSigningKey = true,
             IssuerSigningKey = new SymmetricSecurityKey(Encoding.UTF8.GetBytes(tokenKey)),
-            ValidateIssuer = true,
-            ValidateAudience = true,
+            ValidateIssuer = false,
+            ValidateAudience = false,
             ValidateLifetime = false
         };
 

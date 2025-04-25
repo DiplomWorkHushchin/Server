@@ -63,11 +63,11 @@ public class AuthController(UserManager<User> userManager, ITokenService tokenSe
     public async Task<ActionResult<UserAuthDto>> LoginUser(LoginDto loginDto)
     {
         var user = await userManager.Users
-            .FirstOrDefaultAsync(x => x.NormalizedUserName == loginDto.Username.ToUpper());
+            .FirstOrDefaultAsync(x => x.NormalizedEmail == loginDto.Email.ToUpper());
         if (user == null || user.UserName == null) return Unauthorized("Invalid username");
 
         var result = await userManager.CheckPasswordAsync(user, loginDto.Password);
-        if (!result) return Unauthorized();
+        if (!result) return Unauthorized("Check you login data");
 
         var (accessToken, refreshToken) = await tokenService.CreateToken(user);
 
@@ -90,7 +90,7 @@ public class AuthController(UserManager<User> userManager, ITokenService tokenSe
         return new UserAuthDto
         {
             User = userDto,
-            Token = accessToken
+            Token = accessToken,
         };
     }
 
@@ -102,8 +102,11 @@ public class AuthController(UserManager<User> userManager, ITokenService tokenSe
         var refreshToken = Request.Cookies["refreshToken"];
         var accessToken = Request.Headers["Authorization"].FirstOrDefault()?.Split(" ").Last();
 
-        if (string.IsNullOrEmpty(refreshToken) || string.IsNullOrEmpty(accessToken))
-            return Unauthorized("Cannot find tokens");
+        if (string.IsNullOrEmpty(accessToken))
+            return Unauthorized("Cannot find tokens: access");
+
+        if (string.IsNullOrEmpty(refreshToken))
+            return Unauthorized("Cannot find tokens: refresh");
 
         var principal = tokenService.GetPrincipalFromExpiredToken(accessToken);
         if (principal == null) return Unauthorized("Cannot find principal from token");

@@ -12,12 +12,17 @@ builder.Services.AddIdentityServices(builder.Configuration);
 
 var app = builder.Build();
 
-app.UseCors(opt => opt.AllowAnyHeader().AllowAnyMethod()
-    .WithOrigins("http://localhost:4200"));
+app.UseCors(opt => opt.AllowAnyHeader()
+    .AllowAnyMethod()
+    .WithOrigins("https://localhost:3000")
+    .AllowCredentials()
+);
 
 
 app.UseAuthentication();
 app.UseAuthorization();
+
+app.UseStaticFiles();
 
 app.MapControllers();
 
