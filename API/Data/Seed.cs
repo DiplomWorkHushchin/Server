@@ -30,10 +30,14 @@ public class Seed
             FirstName = "",
             LastName = "",
             PhoneNumber = "",
+            UserRoles = new List<UserRole>
+            {
+                new() { Role = roles[0] }
+            }
+
         };
 
         // Admin password here only for dev (Update logic to get from env sooner)
         await userManager.CreateAsync(admin, "Pa$$w0rd");
-        await userManager.AddToRoleAsync(admin, "Admin");
     }
 }

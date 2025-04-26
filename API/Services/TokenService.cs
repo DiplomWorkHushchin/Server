@@ -85,6 +85,29 @@ public class TokenService(IConfiguration config, UserManager<User> userManager, 
         return principal;
     }
 
+    public async Task<User> GetUserFromTokenAsync(string token)
+    {
+        var principal = GetPrincipalFromExpiredToken(token);
+
+        if (principal == null)
+            throw new Exception("Invalid token");
+
+        var username = principal.Identity?.Name;
+        if (string.IsNullOrEmpty(username))
+            throw new Exception("Username not found in token");
+
+        var user = await userManager.Users
+            .Include(u => u.UserRoles).ThenInclude(ur => ur.Role)
+            .Include(u => u.Photos)
+            .Include(u => u.RefreshTokens)
+            .FirstOrDefaultAsync(u => u.UserName == username);
+
+        if (user == null)
+            throw new Exception("User not found");
+
+        return user;
+    }
+
     private string GenerateRefreshToken()
     {
         var randomNumber = new byte[32];

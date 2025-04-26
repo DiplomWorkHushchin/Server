@@ -10,7 +10,11 @@ using Microsoft.EntityFrameworkCore;
 
 namespace API.Controllers.AccountControllers;
 
-public class AuthController(UserManager<User> userManager, ITokenService tokenService, IMapper mapper) : BaseApiController
+public class AuthController(
+    UserManager<User> userManager, 
+    ITokenService tokenService, 
+    IMapper mapper
+    ) : BaseApiController
 {
     [Authorize(Roles = "Admin")]
     [HttpPost("register")] // /auth/register
@@ -26,10 +30,20 @@ public class AuthController(UserManager<User> userManager, ITokenService tokenSe
             FirstName = "",
             LastName = "",
             PhoneNumber = "",
+            UserRoles = new List<UserRole>
+            {
+                new UserRole
+                {
+                    Role = new Role
+                    {
+                        Name = registerDto.Role
+                    }
+                }
+            },
+            Photos = new List<UserPhoto>()
         };
 
         var result = await userManager.CreateAsync(user, registerDto.Password);
-        await userManager.AddToRoleAsync(user, registerDto.Role);
 
         if (!result.Succeeded) return BadRequest(result.Errors);
 
@@ -44,12 +58,6 @@ public class AuthController(UserManager<User> userManager, ITokenService tokenSe
         });
 
         var userDto = mapper.Map<UserDto>(user);
-        var userRoles = await userManager.GetRolesAsync(user);
-
-        var userRole = userRoles.FirstOrDefault();
-        if (userRole == null) return BadRequest("User has no roles assigned");
-
-        userDto.UserRoles = userRole;
 
         return new UserAuthDto
         {
@@ -63,6 +71,8 @@ public class AuthController(UserManager<User> userManager, ITokenService tokenSe
     public async Task<ActionResult<UserAuthDto>> LoginUser(LoginDto loginDto)
     {
         var user = await userManager.Users
+            .Include(u => u.UserRoles).ThenInclude(ur => ur.Role)
+            .Include(u => u.Photos)
             .FirstOrDefaultAsync(x => x.NormalizedEmail == loginDto.Email.ToUpper());
         if (user == null || user.UserName == null) return Unauthorized("Invalid username");
 
@@ -80,12 +90,6 @@ public class AuthController(UserManager<User> userManager, ITokenService tokenSe
         });
 
         var userDto = mapper.Map<UserDto>(user);
-        var userRoles = await userManager.GetRolesAsync(user);
-
-        var userRole = userRoles.FirstOrDefault();
-        if (userRole == null) return BadRequest("User has no roles assigned");
-
-        userDto.UserRoles = userRole;
 
         return new UserAuthDto
         {
@@ -102,26 +106,24 @@ public class AuthController(UserManager<User> userManager, ITokenService tokenSe
         var refreshToken = Request.Cookies["refreshToken"];
         var accessToken = Request.Headers["Authorization"].FirstOrDefault()?.Split(" ").Last();
 
+        Console.WriteLine($"Refresh token: {refreshToken}");
+        Console.WriteLine($"Access token: {accessToken}");
+
         if (string.IsNullOrEmpty(accessToken))
             return Unauthorized("Cannot find tokens: access");
 
         if (string.IsNullOrEmpty(refreshToken))
             return Unauthorized("Cannot find tokens: refresh");
 
-        var principal = tokenService.GetPrincipalFromExpiredToken(accessToken);
-        if (principal == null) return Unauthorized("Cannot find principal from token");
-
-        var username = principal.Identity?.Name;
-        if (username == null || username.Length == 0) return Unauthorized("Username not found in credentials");
-
-        var user = await userManager.Users.Include(u => u.RefreshTokens).FirstOrDefaultAsync(u => u.UserName == username);
-
+        var user = await tokenService.GetUserFromTokenAsync(accessToken);
 
         if (user == null) return Unauthorized("No users founded");
 
-        var oldRefreshToken = user.RefreshTokens.FirstOrDefault(x => x.Token == refreshToken);
-        if (oldRefreshToken == null || oldRefreshToken.ExpiryDate < DateTime.UtcNow) 
-            return Unauthorized("No refresh token founded");
+        var oldRefreshToken = user.RefreshTokens.FirstOrDefault();
+        Console.WriteLine($"Old refresh token: {oldRefreshToken?.Token}");
+
+        if (oldRefreshToken == null || oldRefreshToken.ExpiryDate < DateTime.UtcNow)
+            return Unauthorized("No refresh token in db founded");
 
         var (newAccessToken, newRefreshToken) = await tokenService.CreateToken(user);
 
@@ -136,12 +138,6 @@ public class AuthController(UserManager<User> userManager, ITokenService tokenSe
         Response.Cookies.Append("refreshToken", newRefreshToken.Token, cookieOptions);
 
         var userDto = mapper.Map<UserDto>(user);
-        var userRoles = await userManager.GetRolesAsync(user);
-
-        var userRole = userRoles.FirstOrDefault();
-        if (userRole == null) return BadRequest("User has no roles assigned");
-
-        userDto.UserRoles = userRole;
 
         return new UserAuthDto
         {

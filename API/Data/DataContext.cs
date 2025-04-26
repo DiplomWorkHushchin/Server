@@ -9,6 +9,7 @@ public class DataContext(DbContextOptions options) : IdentityDbContext<User, Rol
     UserRole, IdentityUserLogin<int>, IdentityRoleClaim<int>, IdentityUserToken<int>>(options)
 {
     public DbSet<RefreshToken> RefreshToken { get; set; }
+    public DbSet<UserPhoto> UserPhotos { get; set; }
 
 
     protected override void OnModelCreating(ModelBuilder builder)

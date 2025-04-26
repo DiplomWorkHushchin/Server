@@ -1,4 +1,5 @@
 ﻿using API.Data;
+using API.DTOs.AuthDTOs;
 using API.DTOs.UserDTOs;
 using API.Entities;
 using API.Interfaces;
@@ -13,15 +14,23 @@ using System.Security.Claims;
 namespace API.Controllers.AccountControllers;
 
 [Authorize]
-public class UsersController(UserManager<User> userManager, IMapper mapper, DataContext context, 
-    IWebHostEnvironment _env, ITokenService tokenService) : BaseApiController
+public class UsersController(
+    UserManager<User> userManager, 
+    IMapper mapper, 
+    ITokenService tokenService,
+    IFileService fileService,
+    DataContext context
+    ) : BaseApiController
 {
-    // GET api/users
-    [Authorize(Roles = "Admin")]
-    [HttpGet]
+   // GET api/users
+   [Authorize(Roles = "Admin")]
+   [HttpGet]
     public async Task<ActionResult<List<UserDto>>> GetUsers()
     {
-        var users = await userManager.Users.ToListAsync();
+        var users = await userManager.Users
+            .Include(u => u.Photos)
+            .Include(u => u.UserRoles).ThenInclude(ur => ur.Role)
+            .ToListAsync();
 
         if (users == null || !users.Any()) return NotFound("No users found.");
 
@@ -30,13 +39,7 @@ public class UsersController(UserManager<User> userManager, IMapper mapper, Data
         foreach (var user in users)
         {
             var userDto = mapper.Map<UserDto>(user);
-            var userRoles = await userManager.GetRolesAsync(user);
-
-            var userRole = userRoles.FirstOrDefault();
-            if (userRole == null) return BadRequest("User has no roles assigned");
-
-            userDto.UserRoles = userRole;
-
+         
             usersDto.Add(userDto);
         }
         return usersDto;
@@ -48,107 +51,81 @@ public class UsersController(UserManager<User> userManager, IMapper mapper, Data
     public async Task<ActionResult<UserDto>> GetUser(int id)
     {
         var user = await userManager.Users
-            .Include(u => u.UserPhoto)
+            .Include(u => u.Photos)
+            .Include(u => u.UserRoles).ThenInclude(ur => ur.Role)
             .FirstOrDefaultAsync(u => u.Id == id);
 
         if (user == null) return NotFound("User not found");
 
         var userDto = mapper.Map<UserDto>(user);
-        var userRoles = await userManager.GetRolesAsync(user);
-
-        var userRole = userRoles.FirstOrDefault();
-        if (userRole == null) return BadRequest("User has no roles assigned");
-
-        userDto.UserRoles = userRole;
-
+       
         return Ok(userDto);
     }
 
-    // Get api/users/username
+    // GET api/users/username
     [Authorize]
     [HttpGet("{username}")]
     public async Task<ActionResult<UserDto>> GetUserByUserName(string username)
     {
-        var user = await userManager.FindByNameAsync(username);
+        var user = await userManager.Users
+            .Include(u => u.Photos)
+            .Include(u => u.UserRoles).ThenInclude(ur => ur.Role)
+            .FirstOrDefaultAsync(u => u.UserName == username);
 
         if (user == null) return NotFound("User not found");
 
         var userDto = mapper.Map<UserDto>(user);
-        var userRoles = await userManager.GetRolesAsync(user);
-
-        var userRole = userRoles.FirstOrDefault();
-        if (userRole == null) return BadRequest("User has no roles assigned");
-
-        userDto.UserRoles = userRole;
 
         return Ok(userDto);
     }
 
+
+    // PUT api/users/upload-photo
     [Authorize]
     [HttpPut("upload-photo")]
     public async Task<ActionResult<UserDto>> UpdateUserPhoto([FromForm] IFormFile photo)
     {
-        if (photo == null || photo.Length == 0)
-            return BadRequest("No file uploaded.");
-
         var accessToken = Request.Headers["Authorization"].FirstOrDefault()?.Split(" ").Last();
 
         if (string.IsNullOrEmpty(accessToken))
             return Unauthorized("Cannot find tokens: access");
 
-        var principal = tokenService.GetPrincipalFromExpiredToken(accessToken);
-        if (principal == null) return Unauthorized("Cannot find principal from token");
+        if (photo == null || photo.Length == 0)
+            return BadRequest("No file uploaded.");
 
-        var username = principal.Identity?.Name;
-        if (username == null || username.Length == 0) return Unauthorized("Username not found in credentials");
-
-        var user = await userManager.Users.FirstOrDefaultAsync(u => u.UserName == username);
+        var user = await tokenService.GetUserFromTokenAsync(accessToken);
 
         if (user == null)
             return NotFound("User not found");
 
-        var uploadsPath = Path.Combine(_env.WebRootPath, "UploadsUserPictures");
-        if (!Directory.Exists(uploadsPath))
-            Directory.CreateDirectory(uploadsPath);
+        var userPhotos = user.Photos.ToList();
 
-        if (!string.IsNullOrEmpty(user.UserPhoto))
+        if (userPhotos.Any())
         {
-            var oldPhotoPath = Path.Combine(_env.WebRootPath, user.UserPhoto.TrimStart('/'));
-            if (System.IO.File.Exists(oldPhotoPath))
+            foreach (var userPhoto in userPhotos)
             {
-                System.IO.File.Delete(oldPhotoPath);
+                fileService.DeleteFile(userPhoto.Url); 
+                context.UserPhotos.Remove(userPhoto);
             }
+
+            await context.SaveChangesAsync();
         }
 
-        var fileName = $"{Guid.NewGuid()}{Path.GetExtension(photo.FileName)}";
-        var filePath = Path.Combine(uploadsPath, fileName);
+        var filePath = await fileService.SaveFileAsync(photo, "UploadsUserPictures");
 
-        await using var stream = new FileStream(filePath, FileMode.Create);
-        await photo.CopyToAsync(stream);
-
-        var fileUrl = $"/UploadsUserPictures/{fileName}";
-
-        user.UserPhoto = fileUrl;
+        user.Photos.Add(new UserPhoto
+        {
+            Url = filePath,
+            Created = DateTime.UtcNow,
+            UserId = user.Id
+        });
 
         var result = await userManager.UpdateAsync(user);
         if (!result.Succeeded)
             return BadRequest("Failed to update photo");
 
-        var updatedUser = await userManager.Users
-            .Include(u => u.UserRoles)
-            .FirstOrDefaultAsync(u => u.Id == user.Id);
-
-        var userDto = mapper.Map<UserDto>(updatedUser);
-        var userRoles = await userManager.GetRolesAsync(updatedUser);
-        var userRole = userRoles.FirstOrDefault();
-
-        if (userRole != null)
-        {
-            userDto.UserRoles = userRole;
-        }
+        var userDto = mapper.Map<UserDto>(user);
 
         return Ok(userDto);
     }
-
-
 }
