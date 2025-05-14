@@ -1,4 +1,5 @@
-﻿using API.Extensions;
+﻿using API.Entities.Courses;
+using API.Extensions;
 using Microsoft.AspNetCore.Identity;
 using System.ComponentModel.DataAnnotations;
 using System.ComponentModel.DataAnnotations.Schema;
@@ -22,8 +23,17 @@ public class User : IdentityUser<int>
     public string? Gender { get; set; }
     public string? City { get; set; }
     public string? Country { get; set; }
+
     public ICollection<UserPhoto> Photos { get; set; } = new List<UserPhoto>();
     public ICollection<RefreshToken> RefreshTokens { get; set; } = new List<RefreshToken>();
+
+    public int? GroupId { get; set; }
+    public Group? Group { get; set; } = null!;
+
+
+    public ICollection<CourseInstructor> TeachingCourses { get; set; } = new List<CourseInstructor>();
+    public ICollection<CourseStudent> EnrolledCourses { get; set; } = new List<CourseStudent>();
+
 
     public int GetAge()
     {
